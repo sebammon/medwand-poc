@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bare platform theme with no action bar; the UI is the full-screen WebView. -->
+    <style name="Theme.MedWandPoc" parent="@android:style/Theme.Material.Light.NoActionBar" />
+</resources>

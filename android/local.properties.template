@@ -1,0 +1,8 @@
+# Copy this file to `local.properties` and fill in the values.
+#
+# Android SDK location (Android Studio usually writes this for you):
+sdk.dir=/Users/YOU/Library/Android/sdk
+
+# MedWand SDK credentials — request these from your MedWand sales representative.
+MW_SDK_LICENSE=
+MW_SDK_PUBLIC_KEY=

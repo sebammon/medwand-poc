@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Stethoscope live audio + recording. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The MedWand's otoscope/dermatoscope streams over the USB (UVC) camera;
+         the UVC backend requires the runtime camera permission. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The MedWand attaches as a USB host device. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MedWandPoc">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
