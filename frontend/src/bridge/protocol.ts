@@ -130,7 +130,6 @@ export interface ReplyData {
   id: string;
   ok: boolean;
   error?: BridgeError;
-  result?: unknown;
 }
 
 // Every native → web message is a uniform `{ event, data }` envelope.

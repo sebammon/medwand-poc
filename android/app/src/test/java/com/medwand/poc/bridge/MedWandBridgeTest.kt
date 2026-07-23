@@ -64,35 +64,36 @@ class MedWandBridgeTest {
     }
 
     @Test
-    fun `getState replies ok with the device snapshot`() {
+    fun `getState broadcasts a state event and replies ok`() {
         fake.nextSnapshot = sampleSnapshot(device = "connected")
 
         bridge.send("""{"id":"c1","cmd":"getState"}""")
 
-        val data = lastReplyData()
-        assertEquals("c1", data.getString("id"))
-        assertTrue(data.getBoolean("ok"))
-        assertEquals("connected", data.getJSONObject("result").getString("device"))
+        assertEquals("connected", firstEventData("state").getString("device"))
+        val reply = lastReplyData()
+        assertEquals("c1", reply.getString("id"))
+        assertTrue(reply.getBoolean("ok"))
+        assertFalse(reply.has("result"))
     }
 
     @Test
-    fun `connect drives the device and replies with the fresh snapshot`() {
-        fake.nextSnapshot = sampleSnapshot(device = "connected")
-
+    fun `connect drives the device and replies ok with no snapshot`() {
         bridge.send("""{"id":"c2","cmd":"connect"}""")
 
         assertEquals(listOf("connect"), fake.calls)
         val data = lastReplyData()
         assertTrue(data.getBoolean("ok"))
-        assertEquals("connected", data.getJSONObject("result").getString("device"))
+        assertFalse(data.has("result"))
     }
 
     @Test
-    fun `disconnect closes the device`() {
+    fun `disconnect drives the device disconnect and replies ok with no snapshot`() {
         bridge.send("""{"id":"c3","cmd":"disconnect"}""")
 
-        assertEquals(listOf("close"), fake.calls)
-        assertTrue(lastReplyData().getBoolean("ok"))
+        assertEquals(listOf("disconnect"), fake.calls)
+        val data = lastReplyData()
+        assertTrue(data.getBoolean("ok"))
+        assertFalse(data.has("result"))
     }
 
     @Test
@@ -124,6 +125,19 @@ class MedWandBridgeTest {
         val error = lastReplyData().getJSONObject("error")
         assertEquals("DEVICE_ERROR", error.getString("code"))
         assertEquals("kaboom", error.getString("message"))
+    }
+
+    @Test
+    fun `a dropped command replies busy with no error`() {
+        fake.applied = false
+
+        bridge.send("""{"id":"c6b","cmd":"stopSensor"}""")
+
+        assertEquals(listOf("stopSensor"), fake.calls)
+        val data = lastReplyData()
+        assertFalse(data.getBoolean("ok"))
+        assertFalse(data.has("error"))
+        assertFalse(data.has("result"))
     }
 
     @Test
@@ -346,6 +360,11 @@ class MedWandBridgeTest {
         return json.getJSONObject("data")
     }
 
+    /** The data of the first posted message of the given event type. */
+    private fun firstEventData(event: String): JSONObject =
+        replyProxy.strings.map { JSONObject(it) }.first { it.getString("event") == event }
+            .getJSONObject("data")
+
     /** Records every message the bridge posts back to the web side. */
     private class RecordingReplyProxy : JavaScriptReplyProxy() {
         val strings = mutableListOf<String>()
@@ -368,6 +387,7 @@ class MedWandBridgeTest {
         override var listener: Device.Listener? = null
         var nextSnapshot: DeviceSnapshot = sampleSnapshot()
         var failWith: Exception? = null
+        var applied = true
 
         val calls = mutableListOf<String>()
         val startSensorCalls = mutableListOf<Pair<Sensor, SensorOptions?>>()
@@ -384,16 +404,29 @@ class MedWandBridgeTest {
         }
 
         override fun snapshot(): DeviceSnapshot = nextSnapshot
-        override fun close() = record("close")
+        override fun destroy() = record("destroy")
         override suspend fun connect() = record("connect")
-        override suspend fun startSensor(sensor: Sensor, options: SensorOptions?) {
+        override suspend fun disconnect() = record("disconnect")
+        override suspend fun startSensor(sensor: Sensor, options: SensorOptions?): Boolean {
             startSensorCalls.add(sensor to options)
             record("startSensor")
+            return applied
         }
 
-        override suspend fun stopSensor() = record("stopSensor")
-        override suspend fun startRecording() = record("startRecording")
-        override suspend fun stopRecording() = record("stopRecording")
+        override suspend fun stopSensor(): Boolean {
+            record("stopSensor")
+            return applied
+        }
+
+        override suspend fun startRecording(): Boolean {
+            record("startRecording")
+            return applied
+        }
+
+        override suspend fun stopRecording(): Boolean {
+            record("stopRecording")
+            return applied
+        }
         override suspend fun captureCameraFrame() = record("captureFrame")
         override suspend fun setCameraLed(value: Int) {
             ledValue = value

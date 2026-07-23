@@ -36,19 +36,11 @@ class ProtocolTest {
     }
 
     @Test
-    fun `replyOk echoes the id with an empty result by default`() {
+    fun `replyOk echoes the id and carries no result`() {
         val data = replyData(Protocol.replyOk("cmd-1"))
         assertEquals("cmd-1", data.getString("id"))
         assertTrue(data.getBoolean("ok"))
-        assertEquals(0, data.getJSONObject("result").length())
-    }
-
-    @Test
-    fun `replyOk carries the provided result object`() {
-        val result = JSONObject().put("device", "connected")
-        val data = replyData(Protocol.replyOk("cmd-2", result))
-        assertTrue(data.getBoolean("ok"))
-        assertEquals("connected", data.getJSONObject("result").getString("device"))
+        assertFalse(data.has("result"))
     }
 
     @Test
@@ -60,6 +52,15 @@ class ProtocolTest {
         val error = data.getJSONObject("error")
         assertEquals("SENSOR_BUSY", error.getString("code"))
         assertEquals("camera is already active.", error.getString("message"))
+    }
+
+    @Test
+    fun `replyBusy is a not-ok reply with no error`() {
+        val data = replyData(Protocol.replyBusy("cmd-4"))
+        assertEquals("cmd-4", data.getString("id"))
+        assertFalse(data.getBoolean("ok"))
+        assertFalse(data.has("error"))
+        assertFalse(data.has("result"))
     }
 
     @Test

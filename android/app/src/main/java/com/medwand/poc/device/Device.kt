@@ -24,13 +24,14 @@ interface Device {
     var listener: Listener?
 
     fun snapshot(): DeviceSnapshot
-    fun close()
+    fun destroy()
 
     suspend fun connect()
-    suspend fun startSensor(sensor: Sensor, options: SensorOptions?)
-    suspend fun stopSensor()
-    suspend fun startRecording()
-    suspend fun stopRecording()
+    suspend fun disconnect()
+    suspend fun startSensor(sensor: Sensor, options: SensorOptions?): Boolean
+    suspend fun stopSensor(): Boolean
+    suspend fun startRecording(): Boolean
+    suspend fun stopRecording(): Boolean
     suspend fun captureCameraFrame()
     suspend fun setCameraLed(value: Int)
     suspend fun setCameraFocusManual(enabled: Boolean)

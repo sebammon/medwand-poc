@@ -102,10 +102,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        device.stopMonitoring()
-        device.close()
         webView.destroy()
         scope.cancel()
+        device.stopMonitoring()
+        device.destroy()
         super.onDestroy()
     }
 }

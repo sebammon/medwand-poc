@@ -66,7 +66,7 @@ export function useMedWand(): MedWand {
       bridge.on("error", setError),
       bridge.on("capture", setCapture),
     ];
-    bridge.getState().then(setState).catch(setError);
+    bridge.getState().catch(setError);
     return () => offs.forEach((off) => off());
   }, [bridge]);
 
@@ -97,8 +97,8 @@ export function useMedWand(): MedWand {
     reading,
     capture,
     error,
-    connect: () => run(() => bridge.connect().then(setState)),
-    disconnect: () => run(() => bridge.disconnect().then(setState)),
+    connect: () => run(() => bridge.connect()),
+    disconnect: () => run(() => bridge.disconnect()),
     startSensor,
     stopSensor: () => run(() => bridge.stopSensor()),
     startRecording: () => run(() => bridge.startRecording()),

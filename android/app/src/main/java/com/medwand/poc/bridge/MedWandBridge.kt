@@ -92,8 +92,9 @@ class MedWandBridge(
 
         scope.launch {
             try {
-                val result = dispatch(cmd, args)
-                postString(Protocol.replyOk(id, result))
+                val applied = dispatch(cmd, args)
+                if (applied) postString(Protocol.replyOk(id))
+                else postString(Protocol.replyBusy(id))
             } catch (e: DeviceException) {
                 postString(Protocol.replyError(id, e.code.name, e.message ?: e.code.name))
             } catch (e: Exception) {
@@ -108,17 +109,20 @@ class MedWandBridge(
         }
     }
 
-    private suspend fun dispatch(cmd: String, args: JSONObject): JSONObject = when (cmd) {
-        "getState" -> Protocol.snapshotJson(device.snapshot())
+    private suspend fun dispatch(cmd: String, args: JSONObject): Boolean = when (cmd) {
+        "getState" -> {
+            onStateChanged(device.snapshot())
+            true
+        }
 
         "connect" -> {
             device.connect()
-            Protocol.snapshotJson(device.snapshot())
+            true
         }
 
         "disconnect" -> {
-            device.close()
-            Protocol.snapshotJson(device.snapshot())
+            device.disconnect()
+            true
         }
 
         "startSensor" -> {
@@ -159,65 +163,55 @@ class MedWandBridge(
                 else -> null
             }
             device.startSensor(sensor, options)
-            JSONObject()
         }
 
-        "stopSensor" -> {
-            device.stopSensor()
-            JSONObject()
-        }
+        "stopSensor" -> device.stopSensor()
 
-        "startRecording" -> {
-            device.startRecording()
-            JSONObject()
-        }
+        "startRecording" -> device.startRecording()
 
-        "stopRecording" -> {
-            device.stopRecording()
-            JSONObject()
-        }
+        "stopRecording" -> device.stopRecording()
 
         // Camera-specific controls (only valid while a preview is running).
         "captureFrame" -> {
             device.captureCameraFrame()
-            JSONObject()
+            true
         }
 
         "cameraLed" -> {
             device.setCameraLed(args.optInt("value"))
-            JSONObject()
+            true
         }
 
         "cameraFocusMode" -> {
             device.setCameraFocusManual(args.optBoolean("manual"))
-            JSONObject()
+            true
         }
 
         "cameraFocusValue" -> {
             device.setCameraFocusValue(args.optInt("value"))
-            JSONObject()
+            true
         }
 
         "cameraMove" -> {
             val horizontal = if (args.has("horizontal")) args.optInt("horizontal") else null
             val vertical = if (args.has("vertical")) args.optInt("vertical") else null
             device.moveOtoscope(horizontal, vertical)
-            JSONObject()
+            true
         }
 
         "cameraZoom" -> {
             device.zoomOtoscope(args.optInt("direction"))
-            JSONObject()
+            true
         }
 
         "cameraRadius" -> {
             device.adjustOtoscopeRadius(args.optInt("direction"))
-            JSONObject()
+            true
         }
 
         "cameraReset" -> {
             device.resetCamera()
-            JSONObject()
+            true
         }
 
         else -> throw DeviceException(DeviceErrorCode.DEVICE_ERROR, "Unknown command: $cmd")

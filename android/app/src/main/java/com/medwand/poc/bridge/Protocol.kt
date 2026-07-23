@@ -21,8 +21,8 @@ object Protocol {
         }.toString()
 
     /** A command reply is just a `reply` event whose data echoes the command id. */
-    fun replyOk(id: String, result: JSONObject = JSONObject()): String =
-        event("reply", JSONObject().put("id", id).put("ok", true).put("result", result))
+    fun replyOk(id: String): String =
+        event("reply", JSONObject().put("id", id).put("ok", true))
 
     fun replyError(id: String, code: String, message: String): String =
         event(
@@ -30,6 +30,9 @@ object Protocol {
             JSONObject().put("id", id).put("ok", false)
                 .put("error", JSONObject().put("code", code).put("message", message)),
         )
+
+    fun replyBusy(id: String): String =
+        event("reply", JSONObject().put("id", id).put("ok", false))
 
     fun errorEvent(code: String, message: String): String =
         event("error", JSONObject().put("code", code).put("message", message))

@@ -85,7 +85,7 @@
     }, LATENCY_MS);
   }
 
-  const replyOk = (id, result) => deliver({ event: "reply", data: { id, ok: true, result: result || {} } });
+  const replyOk = (id) => deliver({ event: "reply", data: { id, ok: true } });
   const replyError = (id, code, message) => deliver({ event: "reply", data: { id, ok: false, error: { code, message } } });
   const emit = (event, data) => deliver({ event, data });
   const emitState = () => emit("state", clone(state));
@@ -228,7 +228,8 @@
   function handle(cmd, args, id) {
     switch (cmd) {
       case "getState":
-        return replyOk(id, clone(state));
+        replyOk(id);
+        return emitState();
 
       case "connect":
         state.device = "connected";
@@ -241,7 +242,7 @@
           vendorId: "1234",
           productId: "60",
         };
-        replyOk(id, clone(state));
+        replyOk(id);
         return emitState();
 
       case "disconnect":
@@ -251,7 +252,7 @@
         state.reading = "idle";
         state.activeSensor = null;
         state.capabilities = { thermometer: false, pulseOximeter: false, ecg: false, stethoscope: false, camera: false };
-        replyOk(id, clone(state));
+        replyOk(id);
         return emitState();
 
       case "startSensor": {

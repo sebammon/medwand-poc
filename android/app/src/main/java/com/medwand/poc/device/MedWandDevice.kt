@@ -9,6 +9,8 @@ import com.medwand.sdk_core.Internal.StethoscopeHelpers.MicrophoneModes
 import com.medwand.sdk_core.MedWandController
 import com.medwand.sdk_core.Modules.EcgRenderTarget
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -29,6 +31,9 @@ class MedWandDevice(
     // threads (frame encode, reading/state callbacks), so publish it safely.
     @Volatile
     override var listener: Listener? = null
+
+    // Serializes connect/disconnect so a teardown can't interleave an in-flight connect.
+    private val opLock = Mutex()
 
     private val usbPermission = UsbPermissionRequester(context)
     private var controller: MedWandController? = null
@@ -71,84 +76,109 @@ class MedWandDevice(
      * permission, open the device, initialize it, and wire SDK callbacks.
      * Throws [DeviceException] with a typed code on any failure.
      */
-    override suspend fun connect() = withContext(Dispatchers.IO) {
-        if (license.isEmpty() || publicKey.isEmpty()) {
-            throw DeviceException(
-                DeviceErrorCode.LICENSE_INVALID,
-                "Missing MedWand license configuration."
-            )
-        }
-
-        val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        val controller = this@MedWandDevice.controller ?: MedWandController(usbManager).also {
-            this@MedWandDevice.controller = it
-        }
-
-        controller.onLicenseError =
-            { state -> emitError(DeviceErrorCode.LICENSE_INVALID, "License error: $state") }
-        controller.construct(license, publicKey)
-        if (!controller.isLicenseValid) {
-            throw DeviceException(
-                DeviceErrorCode.LICENSE_INVALID,
-                "The MedWand license is not valid."
-            )
-        }
-
-        if (!usbPermission.ensurePermission(usbManager)) {
-            throw DeviceException(DeviceErrorCode.USB_PERMISSION_DENIED, "USB permission denied.")
-        }
-
-        controller.connect()
-        if (!controller.isConnected) {
-            throw DeviceException(
-                DeviceErrorCode.NOT_CONNECTED,
-                "MedWand not found. Connect the device and try again."
-            )
-        }
-
-        controller.initialize()
-        if (!controller.isInitialized) {
-            throw DeviceException(DeviceErrorCode.DEVICE_ERROR, "MedWand failed to initialize.")
-        }
-
-        // Attach the sensor handlers
-        controller.configure(ecgRenderSink)
-        controller.ecg?.onRecordedStripReady = { raw -> onEcgStripReady(raw) }
-        controller.stethoscope?.onRecordedFramesReady = { raw -> onStethFramesReady(raw) }
-
-        // setCameraFrameHandler creates the camera module, so the recorded-frame
-        // handler can be attached straight after. The SDK delivers dimensionless
-        // ARGB bytes, so the size the camera reported ([cameraPreview]) is read
-        // back here and handed to the pipeline.
-        controller.setCameraFrameHandler { frameBytes ->
-            val target = cameraPreview ?: return@setCameraFrameHandler
-            framePipeline.submit(frameBytes, target.frameWidth, target.frameHeight)
-        }
-        controller.camera?.onRecordedFrameReady = { frameBytes -> onCameraCapture(frameBytes) }
-
-        // Route ongoing SDK events into the listener.
-        controller.onDeviceError = { error ->
-            // Unplugging mid-reading makes the SDK's next I/O fail, surfacing as a
-            // device error. That's not a real fault — it's the detach, already
-            // reported as a `state` change — so swallow it when the MedWand is no
-            // longer attached. A genuine error while still plugged in is emitted.
-            if (isMedWandAttached()) {
-                emitError(DeviceErrorCode.DEVICE_ERROR, error?.toString() ?: "Device error")
+    override suspend fun connect() = opLock.withLock {
+        withContext(Dispatchers.IO) {
+            if (license.isEmpty() || publicKey.isEmpty()) {
+                throw DeviceException(
+                    DeviceErrorCode.LICENSE_INVALID,
+                    "Missing MedWand license configuration."
+                )
             }
-        }
-        controller.onDeviceStateChanged = { emitState() }
-        controller.onReadingStateChanged = { emitState() }
-        // Only one sensor runs at a time, so a reading always belongs to the
-        // active sensor — no need to re-derive it from the reading itself.
-        controller.onReadingReceived = { reading ->
-            activeSensor?.let { sensor -> listener?.onReading(sensor, reading) }
-        }
 
+            val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+            val controller = this@MedWandDevice.controller ?: MedWandController(usbManager).also {
+                this@MedWandDevice.controller = it
+            }
+
+            controller.onLicenseError =
+                { state -> emitError(DeviceErrorCode.LICENSE_INVALID, "License error: $state") }
+            controller.construct(license, publicKey)
+            if (!controller.isLicenseValid) {
+                throw DeviceException(
+                    DeviceErrorCode.LICENSE_INVALID,
+                    "The MedWand license is not valid."
+                )
+            }
+
+            if (!usbPermission.ensurePermission(usbManager)) {
+                throw DeviceException(
+                    DeviceErrorCode.USB_PERMISSION_DENIED,
+                    "USB permission denied."
+                )
+            }
+
+            controller.connect()
+            if (!controller.isConnected) {
+                throw DeviceException(
+                    DeviceErrorCode.NOT_CONNECTED,
+                    "MedWand not found. Connect the device and try again."
+                )
+            }
+
+            controller.initialize()
+            if (!controller.isInitialized) {
+                throw DeviceException(DeviceErrorCode.DEVICE_ERROR, "MedWand failed to initialize.")
+            }
+
+            // Attach the sensor handlers
+            controller.configure(ecgRenderSink)
+            controller.ecg?.onRecordedStripReady = { raw -> onEcgStripReady(raw) }
+            controller.stethoscope?.onRecordedFramesReady = { raw -> onStethFramesReady(raw) }
+
+            // setCameraFrameHandler creates the camera module, so the recorded-frame
+            // handler can be attached straight after. The SDK delivers dimensionless
+            // ARGB bytes, so the size the camera reported ([cameraPreview]) is read
+            // back here and handed to the pipeline.
+            controller.setCameraFrameHandler { frameBytes ->
+                val target = cameraPreview ?: return@setCameraFrameHandler
+                framePipeline.submit(frameBytes, target.frameWidth, target.frameHeight)
+            }
+            controller.camera?.onRecordedFrameReady = { frameBytes -> onCameraCapture(frameBytes) }
+
+            // Route ongoing SDK events into the listener.
+            controller.onDeviceError = { error ->
+                // Unplugging mid-reading makes the SDK's next I/O fail, surfacing as a
+                // device error. That's not a real fault — it's the detach, already
+                // reported as a `state` change — so swallow it when the MedWand is no
+                // longer attached. A genuine error while still plugged in is emitted.
+                if (isMedWandAttached()) {
+                    emitError(DeviceErrorCode.DEVICE_ERROR, error?.toString() ?: "Device error")
+                }
+            }
+            controller.onDeviceStateChanged = { emitState() }
+            controller.onReadingStateChanged = { emitState() }
+            // Only one sensor runs at a time, so a reading always belongs to the
+            // active sensor — no need to re-derive it from the reading itself.
+            controller.onReadingReceived = { reading ->
+                activeSensor?.let { sensor -> listener?.onReading(sensor, reading) }
+            }
+
+            emitState()
+        }
+    }
+
+    /**
+     * Tears the device down for a user disconnect. Serialized against [connect]
+     * via [opLock] so rapid connect/disconnect toggling can't interleave; the
+     * teardown itself is [destroy].
+     */
+    override suspend fun disconnect() = opLock.withLock {
+        destroy()
         emitState()
     }
 
+    private suspend fun withLockOrDrop(block: suspend () -> Unit): Boolean {
+        if (!opLock.tryLock()) return false
+        try {
+            block()
+        } finally {
+            opLock.unlock()
+        }
+        return true
+    }
+
     /** Starts a sensor. Only one runs at a time (bridge doc §3). */
-    override suspend fun startSensor(sensor: Sensor, options: SensorOptions?) =
+    override suspend fun startSensor(sensor: Sensor, options: SensorOptions?) = withLockOrDrop {
         withContext(Dispatchers.IO) {
             val controller = requireInitialized()
             if (activeSensor != null && activeSensor != sensor) {
@@ -186,7 +216,7 @@ class MedWandDevice(
             }
 
             if (!started) {
-                stopSensor()
+                teardownSensor()
                 throw DeviceException(
                     DeviceErrorCode.DEVICE_ERROR,
                     "Failed to start ${sensor.wire}."
@@ -195,10 +225,16 @@ class MedWandDevice(
             activeSensor = sensor
             emitState()
         }
+    }
 
-    // Stops the active sensor so another can start, and emits. Also used to roll
-    // back a failed start, so it keys off the tracking fields, not activeSensor.
-    override suspend fun stopSensor() = withContext(Dispatchers.IO) {
+    override suspend fun stopSensor() = withLockOrDrop { teardownSensor() }
+
+    // Stops the active sensor and emits — the lock-free core. The public
+    // [stopSensor] serializes it via [withLockOrDrop]; the failed-start rollback
+    // paths call it directly since they already hold [opLock] and must not
+    // re-acquire. Keys off the tracking fields (not activeSensor) so it also
+    // rolls back a failed start.
+    private suspend fun teardownSensor() = withContext(Dispatchers.IO) {
         val controller = controller ?: return@withContext
         if (stethMode != null) {
             runCatching { controller.setStethoscopeMode(MicrophoneModes.Off) }
@@ -215,7 +251,7 @@ class MedWandDevice(
     /**
      * Starts (or switches) the live otoscope/dermatoscope preview through the
      * SDK's UVC path. The live/recorded frame handlers and the preview target are
-     * connection-scoped (attached in [connect], cleared in [close]), so this only
+     * connection-scoped (attached in [connect], cleared in [destroy]), so this only
      * drives the per-preview state: the frame encoder and the SDK preview mode.
      * Unlike the startX() sensors it owns its whole flow — throwing with the SDK's
      * detail on failure, and marking the camera active + emitting state on
@@ -241,7 +277,7 @@ class MedWandDevice(
         if (!controller.setCameraMode(target, mode.sdk)) {
             val detail =
                 controller.cameraLastError?.takeIf { it.isNotBlank() } ?: "Preview did not start."
-            stopSensor()
+            teardownSensor()
             throw DeviceException(DeviceErrorCode.DEVICE_ERROR, "Failed to start camera: $detail")
         }
 
@@ -359,15 +395,19 @@ class MedWandDevice(
     }
 
     /** Begins capturing an ECG strip or a stethoscope clip. */
-    override suspend fun startRecording() = withContext(Dispatchers.IO) {
-        requireInitialized().startRecording()
-        emitState()
+    override suspend fun startRecording() = withLockOrDrop {
+        withContext(Dispatchers.IO) {
+            requireInitialized().startRecording()
+            emitState()
+        }
     }
 
     /** Ends the recording; the SDK then delivers a recorded artifact callback. */
-    override suspend fun stopRecording() = withContext(Dispatchers.IO) {
-        requireInitialized().stopRecording()
-        emitState()
+    override suspend fun stopRecording() = withLockOrDrop {
+        withContext(Dispatchers.IO) {
+            requireInitialized().stopRecording()
+            emitState()
+        }
     }
 
     override fun snapshot(): DeviceSnapshot = buildSnapshot()
@@ -381,12 +421,16 @@ class MedWandDevice(
     // The MedWand was physically unplugged. The SDK still believes it is
     // connected, so tear the controller down ourselves and report `detached`.
     private fun onDeviceDetached() {
-        if (controller != null) close()
+        if (controller != null) destroy()
         emitState()
     }
 
-    /** Stops any active sensor and releases the controller. */
-    override fun close() {
+    /**
+     * Terminal teardown: stops any active sensor, clears the SDK callbacks, and
+     * releases the controller. Not serialized — the host teardown and USB-detach
+     * paths call it directly; the disconnect command reaches it via [disconnect].
+     */
+    override fun destroy() {
         val controller = controller ?: return
         // Clear the connection-scoped SDK callbacks (attached in connect) before
         // stopping, so no frame or artifact is delivered mid-teardown.

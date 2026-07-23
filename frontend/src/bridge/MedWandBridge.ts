@@ -76,9 +76,9 @@ export class MedWandBridge {
   }
 
   // Commands (bridge doc §3).
-  getState = () => this.send<DeviceState>("getState");
-  connect = () => this.send<DeviceState>("connect");
-  disconnect = () => this.send<DeviceState>("disconnect");
+  getState = () => this.send("getState");
+  connect = () => this.send("connect");
+  disconnect = () => this.send("disconnect");
   // Every sensor starts here, camera included. The wire carries a single `mode`
   // string; at most one options field is set, so they collapse to it.
   startSensor = (sensor: SensorId, options?: SensorOptions) => {
@@ -113,12 +113,12 @@ export class MedWandBridge {
     const message = JSON.parse(data) as Inbound;
     switch (message.event) {
       case "reply": {
-        const { id, ok, result, error } = message.data;
+        const { id, ok, error } = message.data;
         const entry = this.pending.get(id);
         if (!entry) return;
         this.pending.delete(id);
-        if (ok) entry.resolve(result);
-        else entry.reject(error ?? { code: "DEVICE_ERROR", message: "Unknown error" });
+        if (!ok && error) entry.reject(error);
+        else entry.resolve(undefined);
         break;
       }
       case "state":
