@@ -25,7 +25,7 @@ export function App() {
         <div>
           <h1 className="header__title">MedWand POC</h1>
           <p className="header__subtitle">
-            {mw.native ? "Android shell" : "Browser mock"} · WebMessageListener bridge
+            {mw.native ? "Android shell" : "Browser emulator"} · WebMessageListener bridge
           </p>
         </div>
         <div className="header__status">
@@ -60,9 +60,7 @@ export function App() {
           <p>
             {mw.state?.device === "attached"
               ? "MedWand detected — tap Connect."
-              : mw.state?.device === "connecting"
-                ? "Connecting…"
-                : "Plug in the MedWand to begin."}
+              : "Plug in the MedWand to begin."}
           </p>
         </main>
       ) : (

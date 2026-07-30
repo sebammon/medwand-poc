@@ -470,3 +470,99 @@ body {
 .pad:hover {
   border-color: var(--accent);
 }
+
+/* Development-only emulator panel; see components/EmulatorPanel.tsx. */
+
+.emu,
+.emu-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+}
+
+.emu {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.emu__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.emu__hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.emu__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.emu__label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.emu__row {
+  display: flex;
+  gap: 4px;
+}
+
+.emu__choice {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.emu__choice--active {
+  border-color: var(--accent);
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.emu__readout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.emu-toggle {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.emu-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}

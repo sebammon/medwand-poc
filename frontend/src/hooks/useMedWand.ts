@@ -48,7 +48,7 @@ export function useMedWand(): MedWand {
   const native = channel != null && !channel.__mock;
   const bridge = useMemo(() => {
     if (!channel) {
-      throw new Error("window.MedWand is unavailable — include medwand-mock.js when running in a browser.");
+      throw new Error("window.MedWand is unavailable; the browser emulator installs it in dev.");
     }
     return new MedWandBridge(channel);
     // eslint-disable-next-line react-hooks/exhaustive-deps

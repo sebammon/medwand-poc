@@ -25,12 +25,11 @@ The frontend can select a sensor, start a reading, and display results:
 ```
 medwand-poc/
 ├── frontend/                 React + Vite + TypeScript web app
-│   ├── public/
-│   │   └── medwand-mock.js   standalone browser mock of window.MedWand (shareable)
 │   └── src/
 │       ├── bridge/           protocol types + transport client
+│       │   └── emulator/     browser stand-in for the device (dev only)
 │       ├── hooks/            useMedWand — bridge state as React state
-│       └── components/       one panel per sensor
+│       └── components/       one panel per sensor, plus the emulator's dev panel
 └── android/                  WebView shell (plain Activity, no Compose)
     └── app/src/main/java/com/medwand/poc/
         ├── web/              WebView + asset loader
@@ -144,20 +143,27 @@ npm install
 npm run build      # type-checks and bundles into ../android/app/src/main/assets/
 ```
 
-Run it standalone in a browser with the **device mock** (no hardware needed) —
+Run it standalone in a browser with the **device emulator** (no hardware needed),
 great for iterating on the UI:
 
 ```bash
 npm run dev        # http://localhost:5173
 ```
 
-`index.html` loads `public/medwand-mock.js`, which installs `window.MedWand`
-**only when the real native bridge is absent** (so it's a no-op inside the
-Android shell). The mock speaks the identical wire protocol — same envelope,
-`{ sensor, reading }` readings, base64 `data:` URI captures — so the app's bridge
-code path is the same in the browser and the shell. `medwand-mock.js` is a
-self-contained, dependency-free file you can hand to the web team to develop
-against without this repo.
+`src/main.tsx` installs `src/bridge/emulator` **only in development, and only when
+the real native bridge is absent**, so it is a no-op inside the Android shell and
+absent from production builds. The emulator speaks the identical wire protocol
+(same envelope, `{ sensor, reading }` readings, base64 `data:` URI captures, and
+both camera frame transports), so the app's bridge code path is the same in the
+browser and the shell.
+
+It models the device as a state machine driven by **physical** inputs rather than a
+script: the cable, what the thermometer is aimed at, and the finger on the pulse
+oximeter. A floating dev panel (**Ctrl/Cmd+Shift+9**) drives those inputs and reads
+back what is on the wire. The connect choreography (including the license error and
+the Android USB permission dialog) and the thermometer and pulse oximeter behavior
+come from real device traces; the ECG, stethoscope, and camera are synthetic, and
+say so where they are implemented.
 
 ### 2. Android shell
 

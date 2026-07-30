@@ -3,7 +3,6 @@ package com.medwand.poc.device
 import android.content.Context
 import android.hardware.usb.UsbManager
 import com.medwand.poc.device.Device.Listener
-import com.medwand.sdk_core.Core.EnumReadingState
 import com.medwand.sdk_core.Internal.CameraHelper
 import com.medwand.sdk_core.Internal.StethoscopeHelpers.MicrophoneModes
 import com.medwand.sdk_core.MedWandController
@@ -508,15 +507,10 @@ class MedWandDevice(
         val initialized = controller?.isInitialized == true
         val device = when {
             initialized -> "connected"
-            controller?.isConnected == true -> "connecting"
             isMedWandAttached() -> "attached"
             else -> "detached"
         }
-        val reading = when (controller?.readingState) {
-            null, EnumReadingState.Stopped -> "idle"
-            EnumReadingState.Recording -> "recording"
-            else -> "active"
-        }
+        val reading = controller?.readingState?.name?.lowercase() ?: "stopped"
         return DeviceSnapshot(
             device = device,
             reading = reading,

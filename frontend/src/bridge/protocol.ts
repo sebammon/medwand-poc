@@ -23,26 +23,45 @@ export interface BridgeError {
   message: string;
 }
 
+// Whether the device is plugged in, and whether the SDK has initialized it.
+export type DeviceStatus = "detached" | "attached" | "connected";
+
+// The SDK's EnumReadingState, lowercased by the native bridge. `starting` and
+// `stopping` are transient, and `reading` is the streaming state; a sensor can be
+// active in any of them, so panels key off `activeSensor` rather than this.
+export type ReadingStatus =
+  | "stopped"
+  | "starting"
+  | "started"
+  | "reading"
+  | "recording"
+  | "stopping"
+  | "error";
+
+export interface Capabilities {
+  thermometer: boolean;
+  pulseOximeter: boolean;
+  ecg: boolean;
+  stethoscope: boolean;
+  camera: boolean;
+}
+
+export interface DeviceInfo {
+  udi: string | null;
+  firmwareVersion: string | null;
+  generation: string | null;
+  comPort: string | null;
+  vendorId: string | null;
+  productId: string | null;
+}
+
 export interface DeviceState {
-  device: string; // detached | attached | connecting | connected
-  reading: string; // idle | active | recording
+  device: DeviceStatus;
+  reading: ReadingStatus;
   // The running sensor plus its live, user-settable state (null when idle).
   activeSensor: ActiveSensor | null;
-  capabilities: {
-    thermometer: boolean;
-    pulseOximeter: boolean;
-    ecg: boolean;
-    stethoscope: boolean;
-    camera: boolean;
-  };
-  deviceInfo: {
-    udi: string | null;
-    firmwareVersion: string | null;
-    generation: string | null;
-    comPort: string | null;
-    vendorId: string | null;
-    productId: string | null;
-  };
+  capabilities: Capabilities;
+  deviceInfo: DeviceInfo;
 }
 
 // The active sensor is a tagged union discriminated on `sensor`: the camera and
